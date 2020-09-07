@@ -1,0 +1,12 @@
+
+##################
+BasedOnStyle: LLVM
+##################
+
+AlignOperands: true
+AlignAfterOpenBracket: DontAlign
+BreakBeforeBinaryOperators: NonAssignment
+ColumnLimit: 100
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+IndentCaseLabels: true
+NamespaceIndentation: All

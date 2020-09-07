@@ -1,0 +1,14 @@
+# Standard for the C code
+
+##################
+BasedOnStyle: LLVM
+##################
+
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortBlocksOnASingleLine: true
+AllowShortFunctionsOnASingleLine: None
+IndentWidth: 4
+IndentCaseLabels: true
+BinPackArguments: false
+ColumnLimit: 100
