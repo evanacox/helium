@@ -7,7 +7,7 @@ BasedOnStyle: LLVM
 AllowShortCaseLabelsOnASingleLine: true
 AllowShortIfStatementsOnASingleLine: WithoutElse
 AllowShortBlocksOnASingleLine: true
-AllowShortFunctionsOnASingleLine: None
+AllowShortFunctionsOnASingleLine: Empty
 IndentWidth: 4
 IndentCaseLabels: true
 BinPackArguments: false

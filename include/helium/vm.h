@@ -25,6 +25,9 @@ typedef struct he_stack {
     /** @brief Pointer to the array */
     he_value *stack;
 
+    /** @brief Pointer to the top of the stack */
+    he_value *stack_top;
+
     /** @brief The size of the stack */
     size_t stack_size;
 
@@ -34,8 +37,11 @@ typedef struct he_stack {
 
 /** @brief Represents the return address stack of the VM */
 typedef struct he_return_stack {
-    /** @brief Pointer to the array */
+    /** @brief Pointer to the beginning of the array */
     size_t *stack;
+
+    /** @brief Pointer to the top of the stack */
+    size_t *stack_top;
 
     /** @brief The size of the stack */
     size_t stack_size;
@@ -56,7 +62,7 @@ typedef struct he_vm {
     size_t pc;
 
     /** @brief Pointer to the module being interpreted */
-    he_module *mod;
+    const he_module *mod;
 } he_vm;
 
 /**

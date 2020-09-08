@@ -10,16 +10,18 @@ extern "C" {
 #endif
 
 /** @brief The opcodes for various instructions */
-enum he_opcode {
+typedef enum he_opcode {
     /** @brief Gets the front return address and jumps to it */
-    OP_RET,
+    OP_RET = 0,
 
-    /** @brief Pushes the next instruction address onto the return addr stack and jumps to a symbol
+    /**
+     * @brief Pushes the next address onto the return addr stack and
+     * reads next 8 bytes as an address and jumps to it
      */
     OP_CALL,
 
     /**
-     * @brief Reads the next 4 bytes as an index for the constant pool, and
+     * @brief Reads the next 8 bytes as an index for the constant pool, and
      * pushes the item at that index onto the stack
      */
     OP_LOAD_CONST,
@@ -51,52 +53,58 @@ enum he_opcode {
     /** @brief Pops 2 values, checks if first is lt/equal to second then pushes */
     OP_LTEQ,
 
-    /** @brief Pops 2 values, subtracts them and pushes */
+    /** @brief Pops 2 values, returns if they're equal */
+    OP_EQ,
+
+    /** @brief Pops 1 value, returns !value */
+    OP_NOT,
+
+    /** @brief Pops 1 value, negates it. Returns -value */
+    OP_NEGATE,
+
+    /** @brief Reads the next 8 bytes as an address */
     OP_JMP,
 
-    /** @brief Pops 2 values, subtracts them and pushes */
+    /** @brief Checks if the stack value is 0, if it does, pops and jumps to */
     OP_JZ,
 
     /** @brief Pops 2 values, subtracts them and pushes */
     OP_JNZ,
 
-    /** @brief Pops 2 values, subtracts them and pushes */
-    OP_PUSH,
-
-    /** @brief Pops 2 values, subtracts them and pushes */
+    /** @brief Pops a value off of the stack */
     OP_POP,
-} __attribute__((packed));
+} __attribute__((packed)) he_opcode;
 
-_Static_assert(sizeof(enum he_opcode) == sizeof(uint8_t), "op_code should be same size as byte");
+_Static_assert(sizeof(he_opcode) == sizeof(uint8_t), "op_code should be same size as byte");
 
 /** @brief Represents a call op */
-struct he_op_call {
+typedef struct he_op_call {
     /** @brief The address / PC of where to return to */
     size_t return_address;
-};
+} he_op_call;
 
 /** @brief Represents one of the jump ops (jmp/jz/jnz) */
-struct he_op_jmp {
+typedef struct he_op_jmp {
     /** @brief The address to jump to if the condition is met */
     size_t address;
-};
+} he_op_jmp;
 
 /** @brief Represents a push instruction */
-struct he_op_push {
+typedef struct he_op_push {
     /** @brief The value to push */
     struct he_value val;
-};
+} he_op_push;
 
 /** @brief Represents a single instruction */
-struct he_op {
-    enum he_opcode op;
+typedef struct he_op {
+    he_opcode op;
 
     union he_op_as {
-        struct he_op_call call;
-        struct he_op_jmp jmp;
-        struct he_op_push push;
+        he_op_call call;
+        he_op_jmp jmp;
+        he_op_push push;
     } op_object;
-};
+} he_op;
 
 #ifdef __cplusplus
 }

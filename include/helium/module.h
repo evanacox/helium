@@ -2,6 +2,7 @@
 #define HE_MODULE_H
 
 #include "value.h"
+#include "vector.h"
 #include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -40,9 +41,8 @@ typedef struct he_module {
 /**
  * @brief Initializes a const_pool
  * @param pool The pool to initialize
- * @param capacity An initial capacity for the pool
  */
-void he_const_pool_init(he_const_pool *pool, size_t capacity);
+void he_const_pool_init(he_const_pool *pool);
 
 /**
  * @brief Destroys a pool's members
@@ -70,11 +70,11 @@ void he_module_destroy(he_module *mod);
 void he_module_write_byte(he_module *mod, uint8_t byte);
 
 /**
- * @brief Adds a 4 byte integer to the byte array
+ * @brief Adds an 8 byte integer to the byte array
  * @param mod The module to add to
  * @param num The number to write
  */
-void he_module_write_int(he_module *mod, uint32_t num);
+void he_module_write_int(he_module *mod, size_t num);
 
 /**
  * @brief Adds a constant to the const_pool, and writes an OP_LOAD_CONST

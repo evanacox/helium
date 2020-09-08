@@ -12,7 +12,7 @@ extern "C" {
 
 /** @brief Tags the `he_value::as` union */
 typedef enum he_value_type {
-    TYPE_BOOL,
+    TYPE_BOOL = 0,
     TYPE_INT,
     TYPE_FLOAT,
     TYPE_STRING,
