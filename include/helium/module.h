@@ -12,43 +12,13 @@
 extern "C" {
 #endif
 
-/** @brief Represents the "constant" section of a module, holding all the known constants */
-typedef struct he_const_pool {
-    /** @brief Array of he_value objects */
-    he_value *pool;
-
-    /** @brief The size of the array */
-    size_t pool_size;
-
-    /** @brief The capacity of the array */
-    size_t pool_capacity;
-} he_const_pool;
-
 typedef struct he_module {
-    /** @brief Pointer to the bytecode */
-    uint8_t *ops;
-
-    /** @brief Number of bytes in the byte array */
-    size_t ops_size;
-
-    /** @brief Max capacity of the byte array */
-    size_t ops_capacity;
+    /** @brief Vector of opcodes */
+    he_vector ops;
 
     /** @brief Pool of constant values */
-    he_const_pool pool;
+    he_vector pool;
 } he_module;
-
-/**
- * @brief Initializes a const_pool
- * @param pool The pool to initialize
- */
-void he_const_pool_init(he_const_pool *pool);
-
-/**
- * @brief Destroys a pool's members
- * @param pool The pool to destroy
- */
-void he_const_pool_destroy(he_const_pool *pool);
 
 /**
  * @brief Initializes a module
@@ -74,7 +44,7 @@ void he_module_write_byte(he_module *mod, uint8_t byte);
  * @param mod The module to add to
  * @param num The number to write
  */
-void he_module_write_int(he_module *mod, size_t num);
+void he_module_write_int(he_module *mod, uint64_t num);
 
 /**
  * @brief Adds a constant to the const_pool, and writes an OP_LOAD_CONST

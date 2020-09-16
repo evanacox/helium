@@ -29,5 +29,7 @@ void *he_grow_array(void *array_ptr, size_t type_size, size_t *current_length) {
 }
 
 void he_free_array(void *array) {
+    // logic?
+
     free(array);
 }

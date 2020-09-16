@@ -2,6 +2,7 @@
 #define HELIUM_VECTOR_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,7 +20,10 @@ typedef struct he_vector {
     size_t type_size;
 
     /** @brief Array pointer */
-    void *array;
+    uint8_t *array;
+
+    /** @brief Pointer to the last element of the array */
+    void *top;
 } he_vector;
 
 /**
@@ -57,6 +61,21 @@ void he_vector_push(he_vector *vec, void *to_push);
  * @param dest Pointer to the location to put the popped element
  */
 void he_vector_pop(he_vector *vec, void *dest);
+
+/**
+ * @brief Returns a pointer to the very last element
+ * @param vec The vector to get the last element from
+ * @return A pointer to the last element
+ */
+void *he_vector_last(const he_vector *vec);
+
+/**
+ * @brief Effectively an operator[] for he_vector
+ * @param vec The vector to get an element from
+ * @param idx The index to get a pointer to
+ * @return A pointer to vec.array + idx for the type
+ */
+void *he_vector_at(const he_vector *vec, size_t idx);
 
 /**
  * @brief Frees the vector's array and sets it to a pre-defined state

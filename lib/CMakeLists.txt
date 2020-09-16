@@ -3,10 +3,11 @@ project (helium)
 
 # Create the static library
 add_library (helium STATIC 
-    vm.c
-    memory.c
-    module.c
-    vector.c 
+    helium/memory.c
+    helium/module.c
+    helium/value.c
+    helium/vector.c 
+    helium/vm.c
 )
 
 # Make the include directory public

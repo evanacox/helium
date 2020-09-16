@@ -43,7 +43,8 @@ void he_vector_destroy(he_vector *vec) {
 }
 
 void he_vector_pop(he_vector *vec, void *dest) {
-    memcpy(dest, vec->array + vec->size, vec->type_size);
+    assert(vec->size != 0 && "attempting to pop from empty vector");
+    memcpy(dest, vec->array + ((vec->size - 1) * vec->type_size), vec->type_size);
     --vec->size;
 }
 
@@ -55,4 +56,16 @@ void he_vector_push(he_vector *vec, void *to_push) {
 
     memcpy(vec->array + (vec->size * vec->type_size), to_push, vec->type_size);
     ++vec->size;
+}
+
+void *he_vector_last(const he_vector *vec) {
+    assert(vec->size != 0 && "attempting to get last from empty vector");
+
+    return vec->array + ((vec->size - 1) * vec->type_size);
+}
+
+void *he_vector_at(const he_vector *vec, size_t idx) {
+    assert(vec->size <= idx && "attempting to get element past end of vector");
+
+    return vec->array + (idx * vec->type_size);
 }

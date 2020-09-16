@@ -22,32 +22,20 @@ typedef struct he_interpret_result {
 
 /** @brief Represents the data stack of the VM */
 typedef struct he_stack {
-    /** @brief Pointer to the array */
-    he_value *stack;
+    /** @brief Vector representing the stack */
+    he_vector vec;
 
     /** @brief Pointer to the top of the stack */
-    he_value *stack_top;
-
-    /** @brief The size of the stack */
-    size_t stack_size;
-
-    /** @brief Capacity of the stack */
-    size_t stack_capacity;
+    he_value *top;
 } he_stack;
 
 /** @brief Represents the return address stack of the VM */
 typedef struct he_return_stack {
-    /** @brief Pointer to the beginning of the array */
-    size_t *stack;
+    /** @brief Vector representing the stack */
+    he_vector vec;
 
     /** @brief Pointer to the top of the stack */
-    size_t *stack_top;
-
-    /** @brief The size of the stack */
-    size_t stack_size;
-
-    /** @brief Capacity of the stack */
-    size_t stack_capacity;
+    size_t *top;
 } he_return_stack;
 
 /** @brief Represents the VM */
@@ -56,7 +44,7 @@ typedef struct he_vm {
     he_stack stack;
 
     /** @brief Return address stack */
-    he_return_stack return_addresses;
+    he_return_stack ret_addrs;
 
     /** @brief Index of the current instruction */
     size_t pc;
@@ -82,7 +70,7 @@ void he_vm_destroy(he_vm *vm);
  * @param vm The VM instance to use
  * @param mod The module to run
  */
-void he_vm_run(he_vm *vm, he_module *mod);
+he_interpret_flag he_vm_run(he_vm *vm, he_module *mod);
 
 #ifdef __cplusplus
 }

@@ -8,74 +8,66 @@
 jmp_buf jump_buffer;
 
 static void he_stack_init(he_stack *stack) {
-    stack->stack = NULL;
-    stack->stack_size = 0;
-    stack->stack_capacity = 0;
+    he_vector_init(&stack->vec, sizeof(he_value));
+
+    stack->top = NULL;
 }
 
 static void he_stack_destroy(he_stack *stack) {
-    he_free_array(stack->stack);
+    he_vector_destroy(&stack->vec);
 
     // return back to "no capacity" state
     he_stack_init(stack);
 }
 
 static void he_return_stack_init(he_return_stack *stack) {
-    stack->stack = NULL;
-    stack->stack_size = 0;
-    stack->stack_capacity = 0;
+    he_vector_init(&stack->vec, sizeof(size_t));
+
+    stack->top = NULL;
 }
 
 static void he_return_stack_destroy(he_return_stack *stack) {
-    he_free_array(stack->stack);
+    he_vector_destroy(&stack->vec);
 
     // set it back to the "no capacity" state
     he_return_stack_init(stack);
 }
 
 static void he_stack_push(he_stack *stack, he_value val) {
-    if (stack->stack_size == stack->stack_capacity) {
-        void *ptr = he_grow_array(stack->stack, sizeof(he_value), &stack->stack_capacity);
+    he_vector_push_val(&stack->vec, val);
 
-        if (!ptr) {
-            fprintf(stderr, "he_stack_push: Unable to expand stack!\n");
-            longjmp(jump_buffer, -1);
-        }
-
-        stack->stack = ptr;
-    }
-
-    stack->stack[stack->stack_size++] = val;
+    stack->top = he_vector_last(&stack->vec);
 }
 
 static void he_return_stack_push(he_return_stack *stack, size_t pc) {
-    if (stack->stack_size == stack->stack_capacity) {
-        void *ptr = he_grow_array(stack->stack, sizeof(size_t), &stack->stack_capacity);
+    he_vector_push_val(&stack->vec, pc);
 
-        if (!ptr) {
-            fprintf(stderr, "he_return_stack_push: Unable to expand stack!\n");
-            longjmp(jump_buffer, -1);
-        }
-
-        stack->stack = ptr;
-    }
-
-    stack->stack[stack->stack_size++] = pc;
+    stack->top = he_vector_last(&stack->vec);
 }
 
 static he_value he_stack_pop(he_stack *stack) {
-    return stack->stack[stack->stack_size--];
+    he_value val;
+
+    he_vector_pop(&stack->vec, &val);
+
+    return val;
 }
 
 static size_t he_return_stack_pop(he_return_stack *stack) {
-    return stack->stack[stack->stack_size--];
+    size_t val;
+
+    he_vector_pop(&stack->vec, &val);
+
+    return val;
 }
 
 static size_t read_address(he_vm *vm) {
+    const he_module *mod = vm->mod;
+
     // reads the byte array as a size_t array
     // and returns the first, effectively
     // reading the next 8 bytes as a size_t
-    size_t *next_8_bytes = (void *)(vm->mod->ops + vm->pc);
+    size_t *next_8_bytes = he_vector_at(&mod->ops, vm->pc);
 
     // so the 8 bytes won't get read as bytecode
     vm->pc += 8;
@@ -84,7 +76,7 @@ static size_t read_address(he_vm *vm) {
 }
 
 static he_value *he_stack_peek(he_stack *stack) {
-    return stack->stack + stack->stack_size;
+    return stack->top;
 }
 
 static void he_val_add(he_value *top, he_value second) {
@@ -124,26 +116,28 @@ none:
 }
 
 #define ARITHMETIC_OP(op_name, op)                                                                 \
-    assert(top->type == TYPE_BOOL || top->type == TYPE_INT || top->type == TYPE_FLOAT ||           \
-           top->type == TYPE_STRING || top->type == TYPE_OBJECT);                                  \
+    do {                                                                                           \
+        assert(top->type == TYPE_BOOL || top->type == TYPE_INT || top->type == TYPE_FLOAT ||       \
+               top->type == TYPE_STRING || top->type == TYPE_OBJECT);                              \
                                                                                                    \
-    if (top->type != second.type) { fprintf(stderr, "he_val_" #op_name ": types mismatched!\n"); } \
+        if (top->type != second.type) {                                                            \
+            fprintf(stderr, "he_val_" #op_name ": types mismatched!\n");                           \
+        }                                                                                          \
                                                                                                    \
-    static void *dispatch_table[] = {&&none, &&integer, &&floating, &&none, &&none};               \
-                                                                                                   \
-    goto *dispatch_table[top->type];                                                               \
-                                                                                                   \
-    integer:                                                                                       \
-    top->as.integer = he_val_as_int(top) op he_val_as_int(&second);                                \
-    return;                                                                                        \
-                                                                                                   \
-    floating:                                                                                      \
-    top->as.floating = he_val_as_float(top) op he_val_as_float(&second);                           \
-    return;                                                                                        \
-                                                                                                   \
-    none:                                                                                          \
-    fprintf(stderr, "he_val_" #op_name ": unable to " #op " type!\n");                             \
-    longjmp(jump_buffer, -1);
+        switch (top->type) {                                                                       \
+            case TYPE_INT:                                                                         \
+                /* ... */                                                                          \
+                top->as.integer = he_val_as_int(top) op he_val_as_int(&second);                    \
+                break;                                                                             \
+            case TYPE_FLOAT:                                                                       \
+                top->as.floating = he_val_as_float(top) op he_val_as_float(&second);               \
+                break;                                                                             \
+            default:                                                                               \
+                fprintf(stderr, "he_val_" #op_name ": unable to " #op " type!\n");                 \
+                longjmp(jump_buffer, -1);                                                          \
+                break;                                                                             \
+        }                                                                                          \
+    } while (false)
 
 static void he_val_sub(he_value *top, he_value second) {
     ARITHMETIC_OP(sub, -);
@@ -254,11 +248,11 @@ static void he_val_negate(he_value *top) {
            top->type == TYPE_STRING || top->type == TYPE_OBJECT);
 
     static void *dispatch_table[] = {
-        &&none,     // bools cant be added
-        &&integer,  // ints can be added
-        &&floating, // floats can be added
-        &&none,     // strings can be concatted
-        &&none,     // objects cant be added
+        &&none,     // bools cant be negated
+        &&integer,  // ints can be negated
+        &&floating, // floats can be negated
+        &&none,     // strings can be negated
+        &&none,     // objects cant be negated
     };
 
     goto *dispatch_table[top->type];
@@ -290,7 +284,7 @@ static bool he_jmp_result(he_value *top) {
 
 void he_vm_init(he_vm *vm) {
     he_stack_init(&vm->stack);
-    he_return_stack_init(&vm->return_addresses);
+    he_return_stack_init(&vm->ret_addrs);
 
     vm->pc = 0;
     vm->mod = NULL;
@@ -298,13 +292,13 @@ void he_vm_init(he_vm *vm) {
 
 void he_vm_destroy(he_vm *vm) {
     he_stack_destroy(&vm->stack);
-    he_return_stack_destroy(&vm->return_addresses);
+    he_return_stack_destroy(&vm->ret_addrs);
 
     vm->pc = 0;
     vm->mod = NULL;
 }
 
-void he_vm_run(he_vm *vm, he_module *mod) {
+he_interpret_flag he_vm_run(he_vm *vm, he_module *mod) {
     vm->mod = mod;
 
     // computed GOTO table
@@ -314,32 +308,36 @@ void he_vm_run(he_vm *vm, he_module *mod) {
         &&op_negate, &&op_jmp,  &&op_jz,         &&op_jnz,  &&op_pop,
     };
 
-#define DISPATCH() goto *dispatch_table[mod->ops[vm->pc++]]
+#define DISPATCH() goto *dispatch_table[*((uint8_t *)he_vector_at(&mod->ops, vm->pc++))];
 
 #define BINARY(op_name)                                                                            \
-    he_value op_name##_second = he_stack_pop(&vm->stack);                                          \
-    he_val_##op_name(he_stack_peek(&vm->stack), op_name##_second);                                 \
-    DISPATCH()
+    do {                                                                                           \
+        he_value second = he_stack_pop(&vm->stack);                                                \
+        he_val_##op_name(he_stack_peek(&vm->stack), second);                                       \
+        DISPATCH()                                                                                 \
+    } while (false)
 
     if (setjmp(jump_buffer) == -1) {
         fprintf(stderr, "helium: exiting with critical error\n");
-        exit(-1);
+        return INTERPRET_FAILURE;
     }
 
-    while (vm->pc != vm->mod->ops_size) {
+    while (vm->pc != vm->mod->ops.size) {
+        DISPATCH();
+
     op_ret:
-        vm->pc = he_return_stack_pop(&vm->return_addresses);
+        vm->pc = he_return_stack_pop(&vm->ret_addrs);
         DISPATCH();
 
     op_call:;
         size_t next_addr = read_address(vm);
-        he_return_stack_push(&vm->return_addresses, vm->pc);
+        he_return_stack_push(&vm->ret_addrs, vm->pc);
         vm->pc = next_addr;
         DISPATCH();
 
     op_load_const:;
         size_t const_addr = read_address(vm);
-        he_stack_push(&vm->stack, mod->pool.pool[const_addr]);
+        he_stack_push(&vm->stack, *(he_value *)he_vector_at(&mod->pool, const_addr));
         DISPATCH();
 
     op_add:;
@@ -410,4 +408,6 @@ void he_vm_run(he_vm *vm, he_module *mod) {
         he_stack_pop(&vm->stack);
         DISPATCH();
     }
+
+    return INTERPRET_SUCCESS;
 }
