@@ -1,5 +1,7 @@
 #include "helium/vm.h"
+#include "helium/instruction.h"
 #include "helium/memory.h"
+#include "helium/value.h"
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -66,76 +68,64 @@ static size_t read_address(he_vm *vm) {
 
     // reads the byte array as a size_t array
     // and returns the first, effectively
-    // reading the next 8 bytes as a size_t
-    size_t *next_8_bytes = he_vector_at(&mod->ops, vm->pc);
+    // reading the next 8 bytes (or 4 or however many it is) as a size_t
+    size_t *next_nativewidth_int = he_vector_at(&mod->ops, vm->pc);
 
-    // so the 8 bytes won't get read as bytecode
-    vm->pc += 8;
+    // so the bytes won't get read as bytecode
+    vm->pc += sizeof(size_t);
 
-    return *next_8_bytes;
+    return *next_nativewidth_int;
 }
 
 static he_value *he_stack_peek(he_stack *stack) {
     return stack->top;
 }
 
+#define IS_TYPE(expr)                                                                              \
+    assert(expr == TYPE_BOOL || expr == TYPE_INT || expr == TYPE_FLOAT || expr == TYPE_STRING ||   \
+           expr == TYPE_OBJECT && "type is not a valid value!")
+
 static void he_val_add(he_value *top, he_value second) {
-    assert(top->type == TYPE_BOOL || top->type == TYPE_INT || top->type == TYPE_FLOAT ||
-           top->type == TYPE_STRING || top->type == TYPE_OBJECT);
+    IS_TYPE(top->type);
 
     if (top->type != second.type) {
         // can't add two mismatched types, at least not at this level
-        fprintf(stderr, "he_val_add: types mismatched!\n");
+        fputs("he_val_add: types mismatched!", stderr);
+        longjmp(jump_buffer, -1);
     }
 
-    static void *dispatch_table[] = {
-        &&none,     // bools cant be added
-        &&integer,  // ints can be added
-        &&floating, // floats can be added
-        &&string,   // strings can be concatted
-        &&none,     // objects cant be added
-    };
-
-    goto *dispatch_table[top->type];
-
-integer:
-    top->as.integer = he_val_as_int(top) + he_val_as_int(&second);
-    return;
-
-floating:
-    top->as.floating = he_val_as_float(top) + he_val_as_float(&second);
-    return;
-
-string:
-    fprintf(stderr, "he_val_add: strcat unimplemented!\n");
-    longjmp(jump_buffer, -1);
-
-none:
-    fprintf(stderr, "he_val_add: unable to + type!\n");
-    longjmp(jump_buffer, -1);
+    switch (top->type) {
+        case TYPE_INT:
+            top->as.integer = he_val_as_int(top) + he_val_as_int(&second);
+            break;
+        case TYPE_FLOAT:
+            top->as.floating = he_val_as_float(top) + he_val_as_float(&second);
+            break;
+        default:
+            fputs("he_val_add: unable to + type!", stderr);
+            longjmp(jump_buffer, -1);
+    }
 }
 
 #define ARITHMETIC_OP(op_name, op)                                                                 \
     do {                                                                                           \
-        assert(top->type == TYPE_BOOL || top->type == TYPE_INT || top->type == TYPE_FLOAT ||       \
-               top->type == TYPE_STRING || top->type == TYPE_OBJECT);                              \
+        IS_TYPE(top->type);                                                                        \
                                                                                                    \
         if (top->type != second.type) {                                                            \
-            fprintf(stderr, "he_val_" #op_name ": types mismatched!\n");                           \
+            fputs("he_val_" #op_name ": types mismatched!\n", stderr);                             \
+            longjmp(jump_buffer, -1);                                                              \
         }                                                                                          \
                                                                                                    \
         switch (top->type) {                                                                       \
             case TYPE_INT:                                                                         \
-                /* ... */                                                                          \
                 top->as.integer = he_val_as_int(top) op he_val_as_int(&second);                    \
                 break;                                                                             \
             case TYPE_FLOAT:                                                                       \
                 top->as.floating = he_val_as_float(top) op he_val_as_float(&second);               \
                 break;                                                                             \
             default:                                                                               \
-                fprintf(stderr, "he_val_" #op_name ": unable to " #op " type!\n");                 \
+                fputs("he_val_" #op_name ": unable to " #op " type!", stderr);                     \
                 longjmp(jump_buffer, -1);                                                          \
-                break;                                                                             \
         }                                                                                          \
     } while (false)
 
@@ -152,12 +142,12 @@ static void he_val_div(he_value *top, he_value second) {
 }
 
 static void he_val_mod(he_value *top, he_value second) {
-    assert(top->type == TYPE_BOOL || top->type == TYPE_INT || top->type == TYPE_FLOAT ||
-           top->type == TYPE_STRING || top->type == TYPE_OBJECT);
+    IS_TYPE(top->type);
 
     if (top->type != second.type) {
         // can't add two mismatched types, at least not at this level
-        fprintf(stderr, "he_val_mod: types mismatched!\n");
+        fputs("he_val_mod: types mismatched!", stderr);
+        longjmp(jump_buffer, -1);
     }
 
     if (top->type == TYPE_INT) {
@@ -165,7 +155,7 @@ static void he_val_mod(he_value *top, he_value second) {
         return;
     }
 
-    fprintf(stderr, "he_val_mod: unable to %% type!\n");
+    fputs("he_val_mod: unable to %% type!", stderr);
     longjmp(jump_buffer, -1);
 }
 
@@ -186,57 +176,41 @@ static void he_val_lteq(he_value *top, he_value second) {
 }
 
 static void he_val_eq(he_value *top, he_value second) {
-    assert(top->type == TYPE_BOOL || top->type == TYPE_INT || top->type == TYPE_FLOAT ||
-           top->type == TYPE_STRING || top->type == TYPE_OBJECT);
-
-    assert(second.type == TYPE_BOOL || second.type == TYPE_INT || second.type == TYPE_FLOAT ||
-           second.type == TYPE_STRING || second.type == TYPE_OBJECT);
+    IS_TYPE(top->type);
+    IS_TYPE(second.type);
 
     if (top->type != second.type) {
         top->type = TYPE_BOOL;
         top->as.boolean = false;
+        return;
     }
 
-    static void *dispatch_table[] = {
-        &&boolean,
-        &&integer,
-        &&floating,
-        &&string,
-        &&none,
-    };
+    switch (top->type) {
+        case TYPE_BOOL:
+            top->as.boolean = he_val_as_bool(top) == he_val_as_bool(&second);
+            break;
+        case TYPE_INT:
+            top->as.boolean = he_val_as_int(top) == he_val_as_int(&second);
+            break;
+        case TYPE_FLOAT:
+            top->as.boolean = he_val_as_float(top) == he_val_as_float(&second);
+            break;
+        case TYPE_STRING:
+            top->as.boolean = (strcmp(he_val_as_string(top), he_val_as_string(&second))) == 0;
+            break;
+        default:
+            fputs("he_val_eq: unable to == type!", stderr);
+            longjmp(jump_buffer, -1);
+    }
 
-    goto *dispatch_table[top->type];
-
-boolean:
-    top->as.boolean = he_val_as_bool(top) == he_val_as_bool(&second);
-    return;
-
-integer:
     top->type = TYPE_BOOL;
-    top->as.boolean = he_val_as_int(top) == he_val_as_int(&second);
-    return;
-
-floating:
-    top->type = TYPE_BOOL;
-    top->as.boolean = he_val_as_float(top) == he_val_as_float(&second);
-    return;
-
-string:
-    top->type = TYPE_BOOL;
-    top->as.boolean = (strcmp(he_val_as_string(top), he_val_as_string(&second))) == 0;
-    return;
-
-none:
-    fprintf(stderr, "he_val_eq: unable to == type!\n");
-    longjmp(jump_buffer, -1);
 }
 
 static void he_val_not(he_value *top) {
-    assert(top->type == TYPE_BOOL || top->type == TYPE_INT || top->type == TYPE_FLOAT ||
-           top->type == TYPE_STRING || top->type == TYPE_OBJECT);
+    IS_TYPE(top->type);
 
     if (!he_val_is_bool(top)) {
-        fprintf(stderr, "he_val_not: unable to 'not' type!\n");
+        fputs("he_val_not: unable to 'not' type!", stderr);
         longjmp(jump_buffer, -1);
     }
 
@@ -244,38 +218,26 @@ static void he_val_not(he_value *top) {
 }
 
 static void he_val_negate(he_value *top) {
-    assert(top->type == TYPE_BOOL || top->type == TYPE_INT || top->type == TYPE_FLOAT ||
-           top->type == TYPE_STRING || top->type == TYPE_OBJECT);
+    IS_TYPE(top->type);
 
-    static void *dispatch_table[] = {
-        &&none,     // bools cant be negated
-        &&integer,  // ints can be negated
-        &&floating, // floats can be negated
-        &&none,     // strings can be negated
-        &&none,     // objects cant be negated
-    };
-
-    goto *dispatch_table[top->type];
-
-integer:
-    top->as.integer = -he_val_as_int(top);
-    return;
-
-floating:
-    top->as.floating = -he_val_as_float(top);
-    return;
-
-none:
-    fprintf(stderr, "he_val_add: unable to + type!\n");
-    longjmp(jump_buffer, -1);
+    switch (top->type) {
+        case TYPE_INT:
+            top->as.integer = -he_val_as_int(top);
+            break;
+        case TYPE_FLOAT:
+            top->as.floating = -he_val_as_float(top);
+            break;
+        default:
+            fputs("he_val_add: unable to + type!", stderr);
+            longjmp(jump_buffer, -1);
+    }
 }
 
 static bool he_jmp_result(he_value *top) {
-    assert(top->type == TYPE_BOOL || top->type == TYPE_INT || top->type == TYPE_FLOAT ||
-           top->type == TYPE_STRING || top->type == TYPE_OBJECT);
+    IS_TYPE(top->type);
 
     if (!he_val_is_bool(top)) {
-        fprintf(stderr, "he_jmp_result: unable to jmp based on non-bool!\n");
+        fputs("he_jmp_result: unable to jmp based on non-bool!", stderr);
         longjmp(jump_buffer, -1);
     }
 
@@ -298,115 +260,129 @@ void he_vm_destroy(he_vm *vm) {
     vm->mod = NULL;
 }
 
-he_interpret_flag he_vm_run(he_vm *vm, he_module *mod) {
-    vm->mod = mod;
-
-    // computed GOTO table
-    static void *dispatch_table[] = {
-        &&op_ret,    &&op_call, &&op_load_const, &&op_add,  &&op_sub,  &&op_mul, &&op_div,
-        &&op_mod,    &&op_gt,   &&op_lt,         &&op_gteq, &&op_lteq, &&op_eq,  &&op_not,
-        &&op_negate, &&op_jmp,  &&op_jz,         &&op_jnz,  &&op_pop,
-    };
-
-#define DISPATCH() goto *dispatch_table[*((uint8_t *)he_vector_at(&mod->ops, vm->pc++))];
-
 #define BINARY(op_name)                                                                            \
     do {                                                                                           \
         he_value second = he_stack_pop(&vm->stack);                                                \
         he_val_##op_name(he_stack_peek(&vm->stack), second);                                       \
-        DISPATCH()                                                                                 \
     } while (false)
 
+#define UNARY(op_name)                                                                             \
+    do {                                                                                           \
+        he_val_##op_name(he_stack_peek(&vm->stack));                                               \
+    } while (false)
+
+void he_vm_use(he_vm *vm, const he_module *mod) {
+    // may have more logic later
+    vm->mod = mod;
+}
+
+he_interpret_flag he_vm_execute_instruction(he_vm *vm, bool has_setjmp_env) {
+    assert(vm->mod && "cannot execute instruction on null module");
+
+    // if a jmp_buf environment doesnt exist, one is created
+    if (!has_setjmp_env) {
+        if (setjmp(jump_buffer) == -1) {
+            fputs("helium: exiting with critical error", stderr);
+            return INTERPRET_FAILURE;
+        }
+    }
+
+    uint8_t *instruction = he_vector_at(&vm->mod->ops, vm->pc++);
+
+    switch (*instruction) {
+        case OP_RET:
+            vm->pc = he_return_stack_pop(&vm->ret_addrs);
+            break;
+        case OP_CALL: {
+            size_t next_addr = read_address(vm);
+            he_return_stack_push(&vm->ret_addrs, vm->pc);
+            vm->pc = next_addr;
+            break;
+        }
+        case OP_LOAD_CONST: {
+            size_t const_addr = read_address(vm);
+            he_stack_push(&vm->stack, *(he_value *)he_vector_at(&vm->mod->pool, const_addr));
+            break;
+        }
+        case OP_ADD:
+            BINARY(add);
+            break;
+        case OP_SUB:
+            BINARY(sub);
+            break;
+        case OP_MUL:
+            BINARY(mul);
+            break;
+        case OP_DIV:
+            BINARY(div);
+            break;
+        case OP_MOD:
+            BINARY(mod);
+            break;
+        case OP_GT:
+            BINARY(gt);
+            break;
+        case OP_LT:
+            BINARY(lt);
+            break;
+        case OP_GTEQ:
+            BINARY(gteq);
+            break;
+        case OP_LTEQ:
+            BINARY(lteq);
+            break;
+        case OP_EQ:
+            BINARY(eq);
+            break;
+        case OP_NOT:
+            UNARY(not );
+            break;
+        case OP_NEGATE:
+            UNARY(negate);
+            break;
+        case OP_JMP:
+            vm->pc = read_address(vm);
+            break;
+        case OP_JZ: {
+            if (he_jmp_result(he_stack_peek(&vm->stack))) {
+                // next instructrion offset is a size_t integer
+                vm->pc = read_address(vm);
+            }
+            break;
+        }
+        case OP_JNZ: {
+            if (!he_jmp_result(he_stack_peek(&vm->stack))) {
+                // next instructrion offset is a size_t integer
+                vm->pc = read_address(vm);
+            }
+            break;
+        }
+        case OP_POP:
+            he_stack_pop(&vm->stack);
+            break;
+        default:
+            fprintf(stderr, "he_vm_run: got unknown instruction! value: %hhx\n", *instruction);
+            longjmp(jump_buffer, -1);
+    }
+
+    return INTERPRET_SUCCESS;
+}
+
+he_interpret_flag he_vm_run(he_vm *vm, const he_module *module) {
+    vm->mod = module;
+
     if (setjmp(jump_buffer) == -1) {
-        fprintf(stderr, "helium: exiting with critical error\n");
+        fputs("helium: exiting with critical error", stderr);
         return INTERPRET_FAILURE;
     }
 
-    while (vm->pc != vm->mod->ops.size) {
-        DISPATCH();
+    while (vm->pc != module->ops.size) {
+        he_interpret_flag res = he_vm_execute_instruction(vm, true);
 
-    op_ret:
-        vm->pc = he_return_stack_pop(&vm->ret_addrs);
-        DISPATCH();
-
-    op_call:;
-        size_t next_addr = read_address(vm);
-        he_return_stack_push(&vm->ret_addrs, vm->pc);
-        vm->pc = next_addr;
-        DISPATCH();
-
-    op_load_const:;
-        size_t const_addr = read_address(vm);
-        he_stack_push(&vm->stack, *(he_value *)he_vector_at(&mod->pool, const_addr));
-        DISPATCH();
-
-    op_add:;
-        BINARY(add);
-
-    op_sub:;
-        BINARY(sub);
-
-    op_mul:;
-        BINARY(mul);
-
-    op_div:;
-        BINARY(div);
-
-    op_mod:;
-        BINARY(mod);
-
-    op_gt:;
-        BINARY(gt);
-
-    op_lt:;
-        BINARY(lt);
-
-    op_gteq:;
-        BINARY(gteq);
-
-    op_lteq:;
-        BINARY(lteq);
-
-    op_eq:;
-        BINARY(eq);
-
-    op_not:;
-        he_val_not(he_stack_peek(&vm->stack));
-        DISPATCH();
-
-    op_negate:;
-        he_val_negate(he_stack_peek(&vm->stack));
-        DISPATCH();
-
-    op_jmp:;
-        size_t jmp_addr = read_address(vm);
-        vm->pc = jmp_addr;
-        DISPATCH();
-
-    op_jz:;
-        size_t jz_addr = read_address(vm);
-
-        if (!he_jmp_result(he_stack_peek(&vm->stack))) {
-            // jz jumps on zero, aka false
-            vm->pc = jz_addr;
+        if (res == INTERPRET_FAILURE) {
+            // if an instruction fails, we can't exactly run anymore now can we?
+            return res;
         }
-
-        DISPATCH();
-
-    op_jnz:;
-        size_t jnz_addr = read_address(vm);
-
-        if (he_jmp_result(he_stack_peek(&vm->stack))) {
-            // jnz jumps on non-zero, aka true
-            vm->pc = jnz_addr;
-        }
-
-        DISPATCH();
-
-    op_pop:
-        // discard the popped value
-        he_stack_pop(&vm->stack);
-        DISPATCH();
     }
 
     return INTERPRET_SUCCESS;

@@ -4,7 +4,7 @@
 #include "helium/module.h"
 #include <string_view>
 
-namespace helium {
+namespace helium_as {
   class assembler {
     std::string_view m_source;
 
@@ -13,6 +13,6 @@ namespace helium {
 
     he_module assemble();
   };
-} // namespace helium
+} // namespace helium_as
 
 #endif

@@ -65,7 +65,7 @@ void *he_vector_last(const he_vector *vec) {
 }
 
 void *he_vector_at(const he_vector *vec, size_t idx) {
-    assert(vec->size <= idx && "attempting to get element past end of vector");
+    assert(idx < vec->size && "attempting to get element past end of vector");
 
     return vec->array + (idx * vec->type_size);
 }

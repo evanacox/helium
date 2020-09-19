@@ -4,6 +4,7 @@ project (helium-as)
 # Create the executable
 add_executable (helium-as 
     helium-as/helium_as.cc
+    helium-as/logger.cc
     helium-as/main.cc 
 )
 

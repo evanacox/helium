@@ -66,11 +66,25 @@ void he_vm_init(he_vm *vm);
 void he_vm_destroy(he_vm *vm);
 
 /**
+ * @brief Sets up a VM instance to use a certain mod
+ * @param vm The VM to give the module to
+ * @param mod The module to give to a VM
+ */
+void he_vm_use(he_vm *vm, const he_module *mod);
+
+/**
+ * @brief Executes a single instruction on the VM using the vm's module
+ * @param vm The vm to execute with
+ * @param has_setjmp_env Whether or not a jmp_buf env already exists for the function to longjmp to
+ */
+he_interpret_flag he_vm_execute_instruction(he_vm *vm, bool has_setjmp_env);
+
+/**
  * @brief Runs a module with a VM instance
  * @param vm The VM instance to use
  * @param mod The module to run
  */
-he_interpret_flag he_vm_run(he_vm *vm, he_module *mod);
+he_interpret_flag he_vm_run(he_vm *vm, const he_module *mod);
 
 #ifdef __cplusplus
 }

@@ -19,10 +19,13 @@ void he_module_write_byte(he_module *mod, uint8_t byte) {
     he_vector_push_val(&mod->ops, byte);
 }
 
-void he_module_write_int(he_module *mod, uint64_t bytes) {
+void he_module_write_int(he_module *mod, size_t bytes) {
+    // type punning in C is great. this is completely UB of course,
+    // but as the consumer will be reading the same number of bytes
+    // as another size_t elsewhere, it works
     uint8_t *as_bytes = (uint8_t *)(&bytes);
 
-    for (int i = 0; i < 8; ++i) {
+    for (unsigned int i = 0; i < sizeof(size_t); ++i) {
         he_module_write_byte(mod, as_bytes[i]);
     }
 }

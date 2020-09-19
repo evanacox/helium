@@ -40,11 +40,11 @@ void he_module_destroy(he_module *mod);
 void he_module_write_byte(he_module *mod, uint8_t byte);
 
 /**
- * @brief Adds an 8 byte integer to the byte array
+ * @brief Adds a native-width integer to the byte array
  * @param mod The module to add to
  * @param num The number to write
  */
-void he_module_write_int(he_module *mod, uint64_t num);
+void he_module_write_int(he_module *mod, size_t num);
 
 /**
  * @brief Adds a constant to the const_pool, and writes an OP_LOAD_CONST

@@ -1,51 +1,31 @@
-#include "helium/helium.h"
+#include "helium/cxx_bindings.hh"
 #include "helium_as.hh"
-#include <iomanip>
-#include <iostream>
+#include "logger.hh"
 
-struct Point {
-  double x, y;
-
-  Point(double x, double y) {
-    this->x = x;
-    this->y = y;
-  }
-
-  void print() { std::cout << "Point { x: " << x << ", y: " << y << " }\n"; }
-};
-
-void print(he_module &mod) {
-  for (auto i = 0; i < mod.ops.size; ++i) {
-    uint8_t *bytes = (uint8_t *)he_vector_at(&mod.ops, i);
-    std::cout << "byte: ";
-    std::printf("%02X", bytes[0]);
-
-    if (*bytes == OP_LOAD_CONST) {
-      size_t *addr = reinterpret_cast<size_t *>(bytes + 1);
-
-      std::cout << ", addr: " << *addr;
-
-      i += 8;
-    }
-
-    std::cout << "\n";
-  }
-}
+using result = helium::vm::result;
 
 int main() {
-  he_module mod;
-  he_module_init(&mod);
+  helium::mod mod;
 
-  he_module_add_constant(&mod, he_val_from_int(12));
-  he_module_add_constant(&mod, he_val_from_int(12));
-  he_module_write_byte(&mod, OP_ADD);
+  mod.add_constant(helium::value::from_int(12));
+  mod.add_constant(helium::value::from_int(12));
+  mod.write_byte(OP_ADD);
+  mod.add_constant(helium::value::from_int(24));
+  mod.write_byte(OP_EQ);
 
-  // print(mod);
+  helium_as::print(mod);
 
-  he_vm vm;
-  he_vm_init(&vm);
+  helium::vm vm;
+  helium_as::print_state(vm);
 
-  he_vm_run(&vm, &mod);
+  vm.use(mod);
 
-  std::cout << "result: " << he_val_as_int(vm.stack.top) << "\n";
+  auto result = result::success;
+
+  do {
+    result = vm.execute_instruction();
+    helium_as::print_state(vm);
+  } while (vm.pc() != mod.ops_size());
+
+  helium_as::print_result(vm);
 }
